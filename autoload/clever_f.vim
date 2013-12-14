@@ -4,9 +4,24 @@ function! clever_f#reset()
     let s:previous_char = {}
     let s:previous_pos = {}
     let s:first_move = {}
+    let s:start_pos = {}
     let s:migemo_dicts = {}
 
     return ""
+endfunction
+
+function! s:InputChar()
+    let charNr = getchar()
+
+    if charNr ==# '€F7'
+        let charNr = char2nr('(')
+    endif
+
+    if charNr ==# '€F8'
+        let charNr = char2nr(')')
+    endif
+
+    return charNr
 endfunction
 
 function! clever_f#find_with(map)
@@ -22,9 +37,10 @@ function! clever_f#find_with(map)
     if current_pos != get(s:previous_pos, mode, [0, 0])
         " TODO consider an argument of getchar(). 0 is needed?
         if g:clever_f_show_prompt | echon "clever-f: " | endif
-        let s:previous_char[mode] = getchar()
+        let s:previous_char[mode] = s:InputChar()
         let s:previous_map[mode] = a:map
         let s:first_move[mode] = 1
+        let s:start_pos[mode] = getpos('.')
         if g:clever_f_show_prompt | redraw! | endif
     else
         " when repeated
@@ -65,10 +81,20 @@ function! clever_f#repeat(back)
 endfunction
 
 function! clever_f#find(map, char)
+    let old_pos = getpos('.')
+
     let next_pos = s:next_pos(a:map, a:char, v:count1)
     if next_pos != [0, 0]
         let mode = mode(1)
+
+        if old_pos[0] != next_pos[0]
+            " Add previous position to jump list
+            call setpos('.', old_pos)
+            normal! m`
+        endif
+
         let s:previous_pos[mode] = next_pos
+
         call cursor(next_pos[0], next_pos[1])
     endif
 endfunction
@@ -120,9 +146,21 @@ function! s:load_migemo_dict()
     endif
 endfunction
 
+function! s:GetRegexForChar(char)
+
+    if a:char ==# '-'
+        return '\(-\|_\)'
+
+    elseif a:char ==# "'"
+        return '\(''\|"\)'
+    endif
+
+    return a:char
+endfunction
+
 function! s:generate_pattern(map, char)
     let char = type(a:char) == type(0) ? nr2char(a:char) : a:char
-    let regex = char
+    let regex = s:GetRegexForChar(char)
 
     let should_use_migemo = s:should_use_migemo(char)
     if should_use_migemo
